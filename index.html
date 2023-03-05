@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Base64 Image Compressor</title>
+  <script src="https://cdn.jsdelivr.net/npm/compressorjs@1.2.1/dist/compressor.min.js"></script>
+  <script src="https://kangax.github.io/html-minifier/dist/htmlminifier.min.js"></script>
+</head>
+
+<body>
+  <section style="border: 1px solid #CCC; padding: 10px;">
+    <div>Please input base64 image:<input type="text" id="inputBase64Image" />&nbsp;&nbsp;
+      <button id="compressImageBtn">compress</button>&nbsp;&nbsp;
+      <button id="resetImageBtn">clear</button>
+    </div>
+    <div id="compressedImageResult"></div>
+  </section>
+
+  <section style="border: 1px solid #CCC; padding: 10px; margin-top: 10px;">
+    <div>Please select HTML file: <input type="file" id="inputHtmlFile" />&nbsp;&nbsp;
+      <button id="compressHtmlBtn">compress</button>
+    </div>
+    <div id="compressedHtmlResult"></div>
+  </section>
+
+  <script>
+    const minify = require("html-minifier").minify;
+    const compressImage = async (base64Image) => {
+      if (!/^data:image\/(jpeg|png|jpg);base64,.+/.test(base64Image)) {
+        return base64Image;
+      }
+
+      const sourceBlob = await fetch(base64Image).then((response) => response.blob());
+      const process = await (new Promise((resolve, reject) => {
+        new Compressor(sourceBlob, {
+          strict: true,
+          checkOrientation: true,
+          retainExif: true,
+          maxWidth: 2048,
+          quality: 0.8,
+          success: resolve,
+          error: reject
+        });
+      }));
+      const outputBase64Image = await (new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(process);
+      }))
+
+      return outputBase64Image;
+    };
+
+    const loadHtmlFileToString = async () => {
+      const files = document.getElementById('inputHtmlFile').files;
+      if (files.length !== 1 || !/\.(htm|html)$/.test(files[0].name)) {
+        alert('請選擇 html 檔案');
+        return undefined;
+      }
+      const htmlContent = await (new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsText(files[0]);
+      }))
+
+      return {
+        fileName: files[0].name,
+        htmlCode: htmlContent
+      }
+    }
+
+    const compressHtml = async (htmlContent) => {
+      let htmlCode = minify(htmlContent.trim(), {
+        caseSensitive: false,
+        collapseBooleanAttributes: true,
+        collapseInlineTagWhitespace: false,
+        collapseWhitespace: true,
+        conservativeCollapse: false,
+        continueOnParseError: true,
+        decodeEntities: true,
+        minifyCSS: true,
+        minifyJS: true,
+        minifyURLs: false,
+        removeComments: true,
+        removeEmptyAttributes: true,
+        removeOptionalTags: true,
+        removeOptionalTags: true,
+        removeTagWhitespace: true,
+        removeStyleLinkTypeAttributes: true,
+        removeScriptTypeAttributes: true,
+        sortAttributes: true,
+        sortClassName: true,
+        useShortDoctype: false,
+      })
+
+      const base64Images = htmlCode.match(/"data:image\/(jpeg|png|jpg);base64,[^"]+"/g);
+      const replaceFunctions = await Promise.all([...new Set(base64Images)].map(async (sourceImage) => {
+        const compressedString = await compressImage(sourceImage.replace(/^"/, '').replace(/"$/, ''))
+        return (code) => code.replaceAll(sourceImage, `"${compressedString}"`)
+      }))
+      replaceFunctions.forEach((cb) => {
+        htmlCode = cb(htmlCode)
+      })
+
+      return htmlCode;
+    }
+
+    const downloadFile = (dataString, fileName) => {
+      const a = document.createElement("a");
+      document.body.appendChild(a);
+      a.style = "display: none";
+      const blob = new Blob([dataString], { type: "text/html" })
+      const url = window.URL.createObjectURL(blob);
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('compressImageBtn').addEventListener('click', async (evt) => {
+      const sourceImage = document.getElementById('inputBase64Image').value;
+      const compressedImage = await compressImage(sourceImage);
+      document.getElementById('compressedImageResult').innerHTML = `
+      <div>compressed base64 image: <textarea>${compressedImage}</textarea></div>
+      <div>original image: <img src="${sourceImage}" alt="outputBase64ImageOriginal" /></div>
+      <div>compressed image: <img src="${compressedImage}" alt="outputBase64ImagePreview" /></div>
+      <div>Original Length: ${sourceImage.length}, <br/>Compressed Length: ${compressedImage.length}, <br/>Reduced Rate: ${(sourceImage.length - compressedImage.length) / sourceImage.length * 100}%</div>
+      `;
+    });
+
+    document.getElementById('resetImageBtn').addEventListener('click', async (evt) => {
+      document.getElementById('compressedImageResult').innerText = '';
+    });
+
+    document.getElementById('compressHtmlBtn').addEventListener('click', async (evt) => {
+      const sourceHtml = await loadHtmlFileToString()
+      if (sourceHtml === undefined) {
+        return
+      }
+
+      compressedHtmlCode = await compressHtml(sourceHtml.htmlCode);
+
+      document.getElementById('compressedHtmlResult').innerHTML =
+        `Original Length: ${sourceHtml.htmlCode.length}, <br/>Compressed Length: ${compressedHtmlCode.length}, <br/>Reduced Rate: ${(sourceHtml.htmlCode.length - compressedHtmlCode.length) / sourceHtml.htmlCode.length * 100}%`;
+
+      downloadFile(compressedHtmlCode, `compressed-${sourceHtml.fileName}`);
+    });
+  </script>
+</body>
+
+</html>

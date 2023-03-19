@@ -95,7 +95,6 @@
         removeComments: true,
         removeEmptyAttributes: true,
         removeOptionalTags: true,
-        removeOptionalTags: true,
         removeTagWhitespace: true,
         removeStyleLinkTypeAttributes: true,
         removeScriptTypeAttributes: true,
@@ -129,6 +128,7 @@
     }
 
     document.getElementById('compressImageBtn').addEventListener('click', async (evt) => {
+      gtag('event', 'click_compress_base64_image');
       const sourceImage = document.getElementById('inputBase64Image').value;
       const compressedImage = await compressImage(sourceImage);
       document.getElementById('compressedImageResult').innerHTML = `
@@ -148,8 +148,9 @@
       if (sourceHtml === undefined) {
         return
       }
+      gtag('event', 'click_compress_html');
 
-      compressedHtmlCode = await compressHtml(sourceHtml.htmlCode);
+      const compressedHtmlCode = await compressHtml(sourceHtml.htmlCode);
 
       document.getElementById('compressedHtmlResult').innerHTML =
         `Original Length: ${sourceHtml.htmlCode.length}, <br/>Compressed Length: ${compressedHtmlCode.length}, <br/>Reduced Rate: ${(sourceHtml.htmlCode.length - compressedHtmlCode.length) / sourceHtml.htmlCode.length * 100}%`;
